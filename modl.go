@@ -138,7 +138,7 @@ var _, _ SqlExecutor = &DbMap{}, &Transaction{}
 // a call to Commit() or Rollback()
 type Transaction struct {
 	dbmap *DbMap
-	tx    *sqlx.Tx
+	Tx    *sqlx.Tx
 }
 
 // Insert has the same behavior as DbMap.Insert(), but runs in a transaction.
@@ -169,34 +169,34 @@ func (t *Transaction) Select(dest interface{}, query string, args ...interface{}
 // Exec has the same behavior as DbMap.Exec(), but runs in a transaction.
 func (t *Transaction) Exec(query string, args ...interface{}) (sql.Result, error) {
 	t.dbmap.trace(query, args)
-	return t.tx.Exec(query, args...)
+	return t.Tx.Exec(query, args...)
 }
 
 // Commit commits the underlying database transaction.
 func (t *Transaction) Commit() error {
 	t.dbmap.trace("commit;")
-	return t.tx.Commit()
+	return t.Tx.Commit()
 }
 
 // Rollback rolls back the underlying database transaction.
 func (t *Transaction) Rollback() error {
 	t.dbmap.trace("rollback;")
-	return t.tx.Rollback()
+	return t.Tx.Rollback()
 }
 
 func (t *Transaction) queryRow(query string, args ...interface{}) *sql.Row {
 	t.dbmap.trace(query, args)
-	return t.tx.QueryRow(query, args...)
+	return t.Tx.QueryRow(query, args...)
 }
 
 func (t *Transaction) queryRowx(query string, args ...interface{}) *sqlx.Row {
 	t.dbmap.trace(query, args)
-	return t.tx.QueryRowx(query, args...)
+	return t.Tx.QueryRowx(query, args...)
 }
 
 func (t *Transaction) query(query string, args ...interface{}) (*sql.Rows, error) {
 	t.dbmap.trace(query, args)
-	return t.tx.Query(query, args...)
+	return t.Tx.Query(query, args...)
 }
 
 ///////////////
