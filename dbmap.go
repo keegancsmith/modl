@@ -281,6 +281,20 @@ func (m *DbMap) DropTables() error {
 	return err
 }
 
+// DropTablesIfExists iterates through TableMaps registered to this DbMap and
+// executes "drop table if exists" statements against the database for each.
+func (m *DbMap) DropTablesIfExists() error {
+	var err error
+	for i := range m.tables {
+		table := m.tables[i]
+		_, e := m.Exec(fmt.Sprintf("drop table if exists %s;", m.Dialect.QuoteField(table.TableName)))
+		if e != nil {
+			err = e
+		}
+	}
+	return err
+}
+
 // Insert runs a SQL INSERT statement for each element in list.  List
 // items must be pointers, because any interface whose TableMap has an
 // auto-increment PK will have its insert Id bound to the PK struct field.
