@@ -365,6 +365,50 @@ func TestColumnProps(t *testing.T) {
 	}
 }
 
+func TestAutoIncrOverride(t *testing.T) {
+	dbmap := newDbMap()
+	type T struct {
+		A  string
+		ID int
+		B  string
+	}
+	//dbmap.TraceOn("", log.New(os.Stdout, "modltest: ", log.Lmicroseconds))
+	dbmap.AddTable(T{}).SetKeys(true, "ID")
+
+	err := dbmap.CreateTables()
+	if err != nil {
+		panic(err)
+	}
+	defer dbmap.Cleanup()
+
+	// Insert with a zero pkey.
+	t0 := &T{ID: 0}
+	_insert(dbmap, t0)
+	t1 := T{}
+	MustGet(dbmap, &t1, t0.ID)
+	if t1.ID != t0.ID {
+		t.Errorf("got t1.ID == %d, want %d", t1.ID, t0.ID)
+	}
+
+	// Insert with an overridden nonzero pkey.
+	t2 := &T{ID: 123}
+	_insert(dbmap, t2)
+	t3 := T{}
+	MustGet(dbmap, &t3, 123)
+	if t3.ID != 123 {
+		t.Errorf("got t3.ID == %d, want %d", t3.ID, 123)
+	}
+
+	// Insert with a zero pkey.
+	t4 := &T{ID: 0}
+	_insert(dbmap, t4)
+	t5 := T{}
+	MustGet(dbmap, &t5, t4.ID)
+	if t5.ID != t4.ID {
+		t.Errorf("got t5.ID == %d, want %d", t5.ID, t4.ID)
+	}
+}
+
 func TestRawSelect(t *testing.T) {
 	dbmap := initDbMap()
 	defer dbmap.Cleanup()
@@ -592,9 +636,8 @@ func TestWithStringPk(t *testing.T) {
 	defer dbmap.Cleanup()
 
 	row := &WithStringPk{"1", "foo"}
-	err = dbmap.Insert(row)
-	if err == nil {
-		t.Errorf("Expected error when inserting into table w/non Int PK and autoincr set true")
+	if err := dbmap.Insert(row); err != nil {
+		t.Error(err)
 	}
 }
 
