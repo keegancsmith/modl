@@ -18,7 +18,6 @@ type TableMap struct {
 	Columns    []*ColumnMap
 	gotype     reflect.Type
 	version    *ColumnMap
-	insertPlan bindPlan
 	updatePlan bindPlan
 	deletePlan bindPlan
 	getPlan    bindPlan
@@ -32,13 +31,17 @@ type TableMap struct {
 	CanPostUpdate bool
 	CanPreDelete  bool
 	CanPostDelete bool
+
+	insertPlan         *bindPlan
+	insertAutoIncrPlan *bindPlan
 }
 
 // ResetSql removes cached insert/update/select/delete SQL strings
 // associated with this TableMap.  Call this if you've modified
 // any column names or the table name itself.
 func (t *TableMap) ResetSql() {
-	t.insertPlan = bindPlan{}
+	t.insertPlan = nil
+	t.insertAutoIncrPlan = nil
 	t.updatePlan = bindPlan{}
 	t.deletePlan = bindPlan{}
 	t.getPlan = bindPlan{}
@@ -234,9 +237,35 @@ func (t *TableMap) bindUpdate(elem reflect.Value) bindInstance {
 	return plan.createBindInstance(elem)
 }
 
+func isZeroVal(v reflect.Value) bool {
+	return v.Interface() == reflect.Zero(v.Type()).Interface()
+}
+
 func (t *TableMap) bindInsert(elem reflect.Value) bindInstance {
-	plan := t.insertPlan
-	if plan.query == "" {
+	// There are 2 possible insert plans: (1) if the autoincr field is
+	// empty, then use a plan that inserts the AutoIncrBindValue; or
+	// (2) if the autoincr field is not empty, use a plan that inserts
+	// the row with the actual field value.
+
+	insertsAutoIncrVal := false
+	for _, col := range t.Keys {
+		if col.isAutoIncr && isZeroVal(elem.FieldByIndex(col.fieldIdx)) {
+			// This stmt needs to insert an auto-incremented value.
+			insertsAutoIncrVal = true
+			break
+		}
+	}
+
+	var plan *bindPlan
+	if insertsAutoIncrVal {
+		plan = t.insertAutoIncrPlan
+	} else {
+		plan = t.insertPlan
+	}
+
+	if plan == nil {
+		plan = &bindPlan{}
+
 		s := bytes.Buffer{}
 		s2 := bytes.Buffer{}
 		s.WriteString(fmt.Sprintf("insert into %s (", t.dbmap.Dialect.QuoteField(t.TableName)))
@@ -254,7 +283,7 @@ func (t *TableMap) bindInsert(elem reflect.Value) bindInstance {
 				}
 				s.WriteString(t.dbmap.Dialect.QuoteField(col.ColumnName))
 
-				if col.isAutoIncr {
+				if col.isAutoIncr && isZeroVal(elem.FieldByIndex(col.fieldIdx)) {
 					s2.WriteString(t.dbmap.Dialect.AutoIncrBindValue())
 					plan.autoIncrIdx = col.fieldIdx
 					autoIncrCol = col
@@ -282,7 +311,12 @@ func (t *TableMap) bindInsert(elem reflect.Value) bindInstance {
 		s.WriteString(";")
 
 		plan.query = s.String()
-		t.insertPlan = plan
+
+		if insertsAutoIncrVal {
+			t.insertAutoIncrPlan = plan
+		} else {
+			t.insertPlan = plan
+		}
 	}
 
 	return plan.createBindInstance(elem)
